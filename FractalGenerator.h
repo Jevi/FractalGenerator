@@ -55,32 +55,26 @@ private:
 	static bool IsExiting();
 	static void OnExit();
 
-	static float _currentScreenWidth;
-	static float _currentScreenHeight;
-	static state _state;
-	static SDL_Surface* _mainWindow;
-	static SDL_Event _event;
-	static vector<Color> _colors;
-	static vector<Point> _points;
+	static state _currentAppState;
+	static SDL_Surface* _appMainWindow;
+	static SDL_Event _currentAppEvent;
+	static vector<Color> _fracColors;
+	static vector<Point> _fracNormalPoints;
 
-	static float _fracxstart;
-	static float _fracxend;
-	static float _fracystart;
-	static float _fracyend;
-
+	static Vertex _fracStart;
+	static Vertex _fracEnd;
+	static Vertex _fracNormalCenter;
+	 
 	static float _pointPrecision;
 	static float _colorPrecision;
 
 	static float _scaleFactor;
 
-	static float _xOffSet;
-	static float _yOffSet;
-	static float _moveStep;
+	static Vertex _pointOffSet;
+	static float _offSetStep;
 	
-	static float _startx;
-	static float _starty;
-	static float _currentx;
-	static float _currenty;
+	static Vertex _mouseStart;
+	static Vertex _mouseEnd;
 	static bool _isMouseDown;
 	static bool _isDraggingMouse;
 
