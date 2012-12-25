@@ -58,8 +58,12 @@ private:
 	static state _currentAppState;
 	static SDL_Surface* _appMainWindow;
 	static SDL_Event _currentAppEvent;
+
 	static vector<Color> _fracColors;
 	static vector<Point> _fracNormalPoints;
+
+	static Vertex _portionStart;
+	static Vertex _portionEnd;
 
 	static Vertex _fracStart;
 	static Vertex _fracEnd;

@@ -10,12 +10,15 @@ unsigned int FractalGenerator::_colorHandle;
 vector<float> FractalGenerator::_vertexBuffer;
 vector<float> FractalGenerator::_colorBuffer;
 
+FractalGenerator::Vertex FractalGenerator::_portionStart;
+FractalGenerator::Vertex FractalGenerator::_portionEnd;
+
 FractalGenerator::Vertex FractalGenerator::_fracNormalCenter;
 
 FractalGenerator::Vertex FractalGenerator::_fracStart;
 FractalGenerator::Vertex FractalGenerator::_fracEnd;
 
-float FractalGenerator::_pointPrecision = 0.01f;
+float FractalGenerator::_pointPrecision = 0.008f;
 float FractalGenerator::_colorPrecision = 75;
 
 float FractalGenerator::_offSetStep = 2;
@@ -39,6 +42,9 @@ void FractalGenerator::OnStart()
 	if (OnInit())
 	{
 		_currentAppState = Running;
+
+		GenerateFractal();
+
 		while(!IsExiting())
 		{
 			OnLoop();
@@ -60,15 +66,12 @@ bool FractalGenerator::OnInit()
 	{
 		return false;
 	}
-	glewInit();
 
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 1, -1);
+	if (glewInit() != 0)
+	{
+		return false;
+	}
 
-	glClear(GL_COLOR_BUFFER_BIT);
-	SDL_GL_SwapBuffers();
-	
 	_pointOffSet.x = 0;
 	_pointOffSet.y = 0;
 
@@ -80,7 +83,17 @@ bool FractalGenerator::OnInit()
 	_fracNormalCenter.x = (SCREEN_WIDTH / 2);
 	_fracNormalCenter.y = (SCREEN_HEIGHT / 2);
 
-	GenerateFractal();
+	_portionStart.x = 0;
+	_portionStart.y = 0;
+	_portionEnd.x = SCREEN_WIDTH;
+	_portionEnd.y = SCREEN_HEIGHT;
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(_portionStart.x, _portionEnd.x, _portionEnd.y, _portionStart.y, 1, -1);
+
+	glClear(GL_COLOR_BUFFER_BIT);
+	SDL_GL_SwapBuffers();	
 
 	return true;
 }
@@ -119,10 +132,8 @@ void FractalGenerator::OnRender()
 	// Draw fractal
 	glPushMatrix();
 
-	glTranslated((SCREEN_WIDTH / 2), (SCREEN_HEIGHT / 2), 0);
-	glScaled(_scaleFactor, _scaleFactor, 1);
-	glTranslated(-(SCREEN_WIDTH / 2), -(SCREEN_HEIGHT / 2), 0);
-	glTranslated(_pointOffSet.x, _pointOffSet.y, 0);
+	glLoadIdentity();
+	glOrtho(_portionStart.x, _portionEnd.x, _portionEnd.y, _portionStart.y, 1, -1);
 
 	glBindBuffer(GL_ARRAY_BUFFER, _vertexHandle);
 	glVertexPointer(2, GL_FLOAT, 0, 0L);
@@ -210,8 +221,8 @@ void FractalGenerator::OnEvent()
 	if (keystate[SDLK_p])
 	{
 		cout << "Scale: " << _scaleFactor << endl;
-		cout << "xoffset: " << _pointOffSet.x << endl;
-		cout << "yoffset: " << _pointOffSet.y << endl;
+		cout << "X Offset: " << _pointOffSet.x << endl;
+		cout << "Y Offset: " << _pointOffSet.y << endl;
 	}
 
 	if (SDL_GetMouseState(NULL, NULL) &SDL_BUTTON_LEFT)
@@ -224,6 +235,7 @@ void FractalGenerator::OnEvent()
 		switch(_currentAppEvent.type)
 		{
 		case SDL_QUIT:
+
 			_currentAppState = Exiting;
 			break;
 		case SDL_MOUSEMOTION:
@@ -250,32 +262,55 @@ void FractalGenerator::OnEvent()
 				_isDraggingMouse = false;
 
 				// modify mouse coordinates to fit scaled image
-				_mouseStart.x = _mouseStart.x;
-				_mouseStart.y = _mouseStart.y;
-				_mouseEnd.x = _mouseEnd.x;
-				_mouseEnd.y = _mouseEnd.y;
+				_mouseStart.x = ((_mouseStart.x / SCREEN_WIDTH) * (_portionEnd.x - _portionStart.x)) + _portionStart.x;
+				_mouseStart.y = ((_mouseStart.y / SCREEN_HEIGHT) * (_portionEnd.y - _portionStart.y)) + _portionStart.y;
+				_mouseEnd.x = ((_mouseEnd.x / SCREEN_WIDTH) * (_portionEnd.x - _portionStart.x)) + _portionStart.x;
+				_mouseEnd.y = ((_mouseEnd.y / SCREEN_HEIGHT) * (_portionEnd.y - _portionStart.y)) + _portionStart.y;
 
 				// get width and height of selection
 				float ratio = (float) SCREEN_WIDTH / (float) SCREEN_HEIGHT;
-				float newFracWidth = (_mouseEnd.x - _mouseStart.x);
+				float newFracWidth = fabs(_mouseEnd.x - _mouseStart.x);
 				float newFracHeight = newFracWidth / ratio;
-
-				_fracNormalCenter.x = _mouseStart.x + (newFracWidth / 2);
-				_fracNormalCenter.y = _mouseStart.y + (newFracHeight / 2);
 
 				if (newFracWidth > 0 && newFracHeight > 0)
 				{
-					_scaleFactor = (SCREEN_WIDTH / newFracWidth) * _scaleFactor;
-
 					Vertex starts;
-					starts.x = _mouseStart.x;
-					starts.y = _mouseStart.y;
-					starts = NormalToComplex(starts);
-
 					Vertex ends;
-					ends.x = _mouseStart.x + newFracWidth;
-					ends.y = _mouseStart.y + newFracHeight;
+
+					if (_mouseStart.x > _mouseEnd.x)
+					{
+						starts.x = _mouseStart.x - newFracWidth;
+						starts.y = _mouseStart.y - newFracHeight;
+
+						ends.x = _mouseStart.x;
+						ends.y = _mouseStart.y;
+
+						_fracNormalCenter.x = _mouseStart.x - (newFracWidth / 2);
+						_fracNormalCenter.y = _mouseStart.y - (newFracHeight / 2);
+					}
+					else
+					{
+						starts.x = _mouseStart.x;
+						starts.y = _mouseStart.y;
+
+						ends.x = _mouseStart.x + newFracWidth;
+						ends.y = _mouseStart.y + newFracHeight;
+
+						_fracNormalCenter.x = _mouseStart.x + (newFracWidth / 2);
+						_fracNormalCenter.y = _mouseStart.y + (newFracHeight / 2);
+					}
+					
+					_portionStart.x = starts.x;
+					_portionStart.y = starts.y;
+					_portionEnd.x = ends.x;
+					_portionEnd.y = ends.y;
+
+					cout << "glOrtho Dimension: : " << _portionStart.x << " , " << _portionStart.y << " -- " << _portionEnd.x << " , " << _portionEnd.y << endl;
+
+					starts = NormalToComplex(starts);
 					ends = NormalToComplex(ends);
+
+					_scaleFactor = (SCREEN_WIDTH / newFracWidth);
 
 					// set new complex display dimensions
 					_fracStart.x = starts.x;
@@ -296,9 +331,10 @@ void FractalGenerator::OnEvent()
 
 void FractalGenerator::GenerateFractal()
 {
+	cout << "Generating Fractal" << endl;
+
 	if (_fracNormalPoints.size() > 0)
 	{
-		cout << "\nRegenerating Fractal" << endl;
 		_fracNormalPoints.clear();
 		_vertexBuffer.clear();
 		_colorBuffer.clear();
@@ -331,11 +367,11 @@ void FractalGenerator::GenerateFractal()
 	Vertex currentComplexVertex;
 	int iterations;
 	int maxIterations = _fracColors.size();
-	_pointPrecision =  0.01f / _scaleFactor;
+	float _fracStep =  _pointPrecision / _scaleFactor;
 
-	for (float x = _fracStart.x; x < _fracEnd.x; x += _pointPrecision)
+	for (float x = _fracStart.x; x < _fracEnd.x; x += _fracStep)
 	{
-		for (float y = _fracStart.y; y < _fracEnd.y; y += _pointPrecision)
+		for (float y = _fracStart.y; y < _fracEnd.y; y += _fracStep)
 		{
 			iterations = 0;
 			c = ComplexNum(x, y);
@@ -368,15 +404,13 @@ void FractalGenerator::GenerateFractal()
 		_colorBuffer.push_back(_fracNormalPoints[i].c.b);
 	}
 
-	// cout << "Center of Selection: " << _currentScreenWidth / 2 << " , " << _currentScreenHeight / 2 << endl;
 	cout << "Start: " << _fracStart.x << " , " << _fracStart.y << endl;
 	cout << "Current: " << _fracEnd.x << " , " << _fracEnd.y << endl;
 	cout << "Zoom Factor: " << _scaleFactor << endl;
 
 	cout << "Max Iterations: " << maxIterations << endl;
 	cout << "Total Points: " << _fracNormalPoints.size() << endl;
-	cout << "point buffer size: " << _vertexBuffer.size() << endl;
-	cout << "color buffer size: " << _colorBuffer.size() << endl;
+	cout << "\n" << endl;
 
 	glGenBuffers(1, &_vertexHandle);
 	glBindBuffer(GL_ARRAY_BUFFER, _vertexHandle);
