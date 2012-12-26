@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <SDL_opengl.h>
 
+#include <omp.h>
 #include <vector>
 #include <iostream>
 #include <stdlib.h>
@@ -27,8 +28,7 @@ private:
 
 	struct Vertex
 	{
-		float x;
-		float y;
+		float x, y;
 	};
 
 	struct Color
@@ -60,7 +60,6 @@ private:
 	static SDL_Event _currentAppEvent;
 
 	static vector<Color> _fracColors;
-	static vector<Point> _fracNormalPoints;
 
 	static Vertex _portionStart;
 	static Vertex _portionEnd;
@@ -70,7 +69,7 @@ private:
 	static Vertex _fracNormalCenter;
 	 
 	static float _pointPrecision;
-	static float _colorPrecision;
+	static int _colorPrecision;
 
 	static float _scaleFactor;
 

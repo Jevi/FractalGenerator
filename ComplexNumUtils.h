@@ -6,6 +6,6 @@ class ComplexNumUtils
 {
 public:
 	static ComplexNum Conjugate(ComplexNum cn);
-	static double Abs(ComplexNum cn);
+	static float Abs(ComplexNum cn);
 };
 

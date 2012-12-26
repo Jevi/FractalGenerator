@@ -4,7 +4,6 @@ SDL_Surface* FractalGenerator::_appMainWindow;
 SDL_Event FractalGenerator::_currentAppEvent;
 FractalGenerator::state FractalGenerator::_currentAppState = Uninitialized;
 vector<FractalGenerator::Color> FractalGenerator::_fracColors;
-vector<FractalGenerator::Point> FractalGenerator::_fracNormalPoints;
 unsigned int FractalGenerator::_vertexHandle;
 unsigned int FractalGenerator::_colorHandle;
 vector<float> FractalGenerator::_vertexBuffer;
@@ -18,8 +17,8 @@ FractalGenerator::Vertex FractalGenerator::_fracNormalCenter;
 FractalGenerator::Vertex FractalGenerator::_fracStart;
 FractalGenerator::Vertex FractalGenerator::_fracEnd;
 
-float FractalGenerator::_pointPrecision = 0.008f;
-float FractalGenerator::_colorPrecision = 75;
+float FractalGenerator::_pointPrecision = 0.005f;
+int FractalGenerator::_colorPrecision = 75;
 
 float FractalGenerator::_offSetStep = 2;
 FractalGenerator::Vertex FractalGenerator::_pointOffSet;
@@ -156,7 +155,7 @@ void FractalGenerator::OnRender()
 		float selectionHeight = selectionWidth / ratio;
 
 		glPushMatrix();
-		glColor3f(1, 1, 1);
+		glColor3f(1, 0, 0);
 		glBegin(GL_LINE_LOOP);
 		glVertex2f(_mouseStart.x, _mouseStart.y);
 		glVertex2f(_mouseStart.x + selectionWidth, _mouseStart.y);
@@ -299,7 +298,7 @@ void FractalGenerator::OnEvent()
 						_fracNormalCenter.x = _mouseStart.x + (newFracWidth / 2);
 						_fracNormalCenter.y = _mouseStart.y + (newFracHeight / 2);
 					}
-					
+
 					_portionStart.x = starts.x;
 					_portionStart.y = starts.y;
 					_portionEnd.x = ends.x;
@@ -333,9 +332,8 @@ void FractalGenerator::GenerateFractal()
 {
 	cout << "Generating Fractal" << endl;
 
-	if (_fracNormalPoints.size() > 0)
+	if (_vertexBuffer.size() > 0)
 	{
-		_fracNormalPoints.clear();
 		_vertexBuffer.clear();
 		_colorBuffer.clear();
 		glDeleteBuffers(1, &_vertexHandle);
@@ -346,70 +344,80 @@ void FractalGenerator::GenerateFractal()
 	{
 		Color color;
 		int maxColor = 256;
-		for (float r = 0; r < maxColor; r += _colorPrecision)
+
+		for (int r = 0; r < maxColor; r += _colorPrecision)
 		{
-			for (float g = 0; g < maxColor; g += _colorPrecision)
+			for (int g = 0; g < maxColor; g += _colorPrecision)
 			{
-				for (float b = 0; b < maxColor; b += _colorPrecision)
+				for (int b = 0; b < maxColor; b += _colorPrecision)
 				{
-					color.r = r;
-					color.g = g;
-					color.b = b;
+					color.r = (float) r;
+					color.g = (float) g;
+					color.b = (float) b;
 					_fracColors.push_back(color);
+
 				}
 			}
 		}
 	}
 
-	ComplexNum c(0, 0);
-	ComplexNum z(0, 0);
-	Point currentNormalVertex;
-	Vertex currentComplexVertex;
-	int iterations;
-	int maxIterations = _fracColors.size();
-	float _fracStep =  _pointPrecision / _scaleFactor;
-
-	for (float x = _fracStart.x; x < _fracEnd.x; x += _fracStep)
+#pragma omp parallel
 	{
-		for (float y = _fracStart.y; y < _fracEnd.y; y += _fracStep)
+		ComplexNum c(0, 0);
+		ComplexNum z(0, 0);
+		Color color;
+		Vertex currentNormalVertex;
+		Vertex currentComplexVertex;
+		int iterations;
+		int maxIterations = _fracColors.size();
+		float _fracStep =  _pointPrecision / _scaleFactor;
+
+		int iEnd = (int) ((_fracEnd.x - _fracStart.x) / _fracStep);
+		int jEnd = (int) ((_fracEnd.y - _fracStart.y) / _fracStep);
+
+#pragma omp for
+		for (int i = 0; i < iEnd; i++)
 		{
-			iterations = 0;
-			c = ComplexNum(x, y);
-			z = ComplexNum(0, 0);
+			float x = _fracStart.x + i * _fracStep;
 
-			while (ComplexNumUtils::Abs(z) < 2 && iterations < maxIterations)
+			for (int j = 0; j < jEnd; j++)
 			{
-				z = z * z + c;
-				++iterations;
+				float y = _fracStart.y + j * _fracStep;
+
+				iterations = 0;
+				c = ComplexNum(x, y);
+				z = ComplexNum(0, 0);
+
+				while (ComplexNumUtils::Abs(z) < 2 && iterations < maxIterations)
+				{
+					z = z * z + c;
+					++iterations;
+				}
+
+				currentComplexVertex.x = x;
+				currentComplexVertex.y = y;
+				currentNormalVertex = ComplexToNormal(currentComplexVertex);
+
+				color = _fracColors[_fracColors.size() % iterations];
+
+#pragma omp critical
+				{
+					_vertexBuffer.push_back(currentNormalVertex.x);
+					_vertexBuffer.push_back(currentNormalVertex.y);
+
+					_colorBuffer.push_back(color.r);
+					_colorBuffer.push_back(color.g);
+					_colorBuffer.push_back(color.b);
+				}
 			}
-
-			currentComplexVertex.x = x;
-			currentComplexVertex.y = y;
-			currentComplexVertex = ComplexToNormal(currentComplexVertex);
-
-			currentNormalVertex.x = currentComplexVertex.x;
-			currentNormalVertex.y = currentComplexVertex.y;
-			currentNormalVertex.c = _fracColors[_fracColors.size() % iterations];
-			_fracNormalPoints.push_back(currentNormalVertex);
 		}
 	}
-
-	for (unsigned int i = 0; i < _fracNormalPoints.size(); i++)
-	{
-		_vertexBuffer.push_back(_fracNormalPoints[i].x);
-		_vertexBuffer.push_back(_fracNormalPoints[i].y);
-
-		_colorBuffer.push_back(_fracNormalPoints[i].c.r);
-		_colorBuffer.push_back(_fracNormalPoints[i].c.g);
-		_colorBuffer.push_back(_fracNormalPoints[i].c.b);
-	}
-
 	cout << "Start: " << _fracStart.x << " , " << _fracStart.y << endl;
 	cout << "Current: " << _fracEnd.x << " , " << _fracEnd.y << endl;
 	cout << "Zoom Factor: " << _scaleFactor << endl;
 
-	cout << "Max Iterations: " << maxIterations << endl;
-	cout << "Total Points: " << _fracNormalPoints.size() << endl;
+	// cout << "Max Iterations: " << maxIterations << endl;
+	cout << "Total Points: " << _vertexBuffer.size() << endl;
 	cout << "\n" << endl;
 
 	glGenBuffers(1, &_vertexHandle);
